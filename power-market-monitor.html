@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Market Stress Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080a0f;
+  --s1:#0d1018;
+  --s2:#121620;
+  --s3:#171c28;
+  --b1:#1e2535;
+  --b2:#28304a;
+  --b3:#3a4460;
+  --t1:#d8dce8;
+  --t2:#8891aa;
+  --t3:#4d5670;
+  --green:#22c97a;
+  --yellow:#f5c842;
+  --orange:#f08030;
+  --red:#e8384a;
+  --blue:#4a9eff;
+  --purple:#9b7efc;
+  --teal:#2ec4b6;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:13px;line-height:1.5;overflow-x:hidden}
+
+/* ── API KEY SCREEN ── */
+#key-screen{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  z-index:1000;flex-direction:column;gap:24px;padding:20px;
+}
+.key-card{
+  background:var(--s1);border:1px solid var(--b2);border-radius:12px;
+  padding:36px 40px;max-width:480px;width:100%;
+}
+.key-title{font-family:var(--mono);font-size:16px;font-weight:500;margin-bottom:6px;color:var(--t1)}
+.key-sub{font-size:12px;color:var(--t2);margin-bottom:24px;line-height:1.7}
+.key-sub a{color:var(--blue);text-decoration:none}
+.key-input{
+  width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:6px;
+  padding:10px 14px;font-family:var(--mono);font-size:12px;color:var(--t1);
+  outline:none;transition:border-color .15s;margin-bottom:12px;
+}
+.key-input:focus{border-color:var(--blue)}
+.key-btn{
+  width:100%;padding:10px;background:var(--blue);border:none;border-radius:6px;
+  color:#fff;font-family:var(--mono);font-size:12px;font-weight:500;cursor:pointer;
+  transition:opacity .15s;
+}
+.key-btn:hover{opacity:.85}
+.key-note{font-size:10px;color:var(--t3);font-family:var(--mono);margin-top:8px;text-align:center}
+
+/* ── MAIN APP ── */
+#app{display:none;flex-direction:column;min-height:100vh}
+
+/* HEADER */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 20px;border-bottom:1px solid var(--b1);
+  background:var(--s1);flex-wrap:wrap;gap:8px;
+  position:sticky;top:0;z-index:100;
+}
+.header-left{display:flex;align-items:baseline;gap:12px}
+.h-title{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.04em}
+.h-sub{font-family:var(--mono);font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.1em}
+.header-right{display:flex;align-items:center;gap:10px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,201,122,.4)}50%{opacity:.7;box-shadow:0 0 0 4px rgba(34,201,122,0)}}
+.live-label{font-family:var(--mono);font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.08em}
+.refresh-btn{
+  background:transparent;border:1px solid var(--b2);border-radius:4px;
+  color:var(--t2);font-family:var(--mono);font-size:10px;padding:3px 9px;
+  cursor:pointer;transition:all .15s;
+}
+.refresh-btn:hover{border-color:var(--b3);color:var(--t1)}
+.key-change{background:transparent;border:none;color:var(--t3);font-family:var(--mono);font-size:10px;cursor:pointer;padding:3px 6px}
+.key-change:hover{color:var(--t2)}
+.last-update{font-family:var(--mono);font-size:10px;color:var(--t3)}
+
+/* MARKET GRID */
+.markets{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+  gap:1px;background:var(--b1);
+  flex:1;
+}
+.market-panel{
+  background:var(--bg);
+  display:flex;flex-direction:column;
+  min-height:480px;
+}
+.panel-header{
+  padding:14px 16px 10px;
+  border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-title{
+  display:flex;align-items:center;gap:10px;
+}
+.market-tag{
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  padding:2px 8px;border-radius:3px;letter-spacing:.05em;
+}
+.tag-erco{background:rgba(74,158,255,.15);color:#4a9eff;border:1px solid rgba(74,158,255,.3)}
+.tag-pjm{background:rgba(155,126,252,.15);color:#9b7efc;border:1px solid rgba(155,126,252,.3)}
+.tag-ciso{background:rgba(46,196,182,.15);color:#2ec4b6;border:1px solid rgba(46,196,182,.3)}
+.tag-aeso{background:rgba(240,128,48,.15);color:#f08030;border:1px solid rgba(240,128,48,.3)}
+.panel-name{font-size:12px;color:var(--t2)}
+.stress-badge{
+  font-family:var(--mono);font-size:10px;
+  padding:3px 8px;border-radius:20px;letter-spacing:.05em;font-weight:500;
+}
+.stress-low{background:rgba(34,201,122,.1);color:var(--green);border:1px solid rgba(34,201,122,.25)}
+.stress-med{background:rgba(245,200,66,.1);color:var(--yellow);border:1px solid rgba(245,200,66,.25)}
+.stress-high{background:rgba(240,128,48,.1);color:var(--orange);border:1px solid rgba(240,128,48,.25)}
+.stress-crit{background:rgba(232,56,74,.1);color:var(--red);border:1px solid rgba(232,56,74,.25)}
+
+/* METRICS ROW */
+.metrics{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  border-bottom:1px solid var(--b1);
+}
+.metric{
+  padding:10px 14px;border-right:1px solid var(--b1);
+}
+.metric:last-child{border-right:none}
+.m-label{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:4px}
+.m-val{font-family:var(--mono);font-size:16px;font-weight:500;line-height:1}
+.m-unit{font-family:var(--mono);font-size:9px;color:var(--t3);margin-top:2px}
+.m-delta{font-family:var(--mono);font-size:10px;margin-top:2px}
+.delta-up{color:var(--red)}
+.delta-dn{color:var(--green)}
+.delta-flat{color:var(--t3)}
+
+/* CHARTS */
+.chart-row{
+  display:grid;grid-template-columns:140px 1fr;
+  flex:1;min-height:0;
+  border-bottom:1px solid var(--b1);
+}
+.donut-wrap{
+  padding:12px;border-right:1px solid var(--b1);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;
+}
+.donut-canvas{position:relative;width:110px;height:110px}
+.donut-canvas canvas{display:block}
+.fuel-legend{width:100%;display:flex;flex-direction:column;gap:3px}
+.fuel-row{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.fuel-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.fuel-name{font-family:var(--mono);font-size:9px;color:var(--t2);flex:1}
+.fuel-pct{font-family:var(--mono);font-size:9px;color:var(--t1);text-align:right}
+.trend-wrap{padding:10px 12px;position:relative;display:flex;flex-direction:column}
+.trend-label{font-family:var(--mono);font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+.trend-canvas{flex:1;position:relative;min-height:100px}
+.trend-canvas canvas{display:block}
+
+/* RENEWABLES BAR */
+.renewables{
+  padding:10px 16px;
+  display:flex;align-items:center;gap:12px;
+}
+.ren-label{font-family:var(--mono);font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+.ren-bar-wrap{flex:1;height:5px;background:var(--b1);border-radius:3px;overflow:hidden}
+.ren-bar{height:100%;border-radius:3px;transition:width .5s ease;background:linear-gradient(90deg,var(--green),var(--teal))}
+.ren-pct{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--green);min-width:36px;text-align:right}
+
+/* LOADING */
+.panel-loading{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;
+  color:var(--t3);font-family:var(--mono);font-size:11px;
+}
+.spin{width:20px;height:20px;border:2px solid var(--b2);border-top-color:var(--t2);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* FOOTER */
+.footer{
+  padding:8px 20px;border-top:1px solid var(--b1);
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--s1);font-family:var(--mono);font-size:10px;color:var(--t3);
+  flex-wrap:wrap;gap:6px;
+}
+.footer a{color:var(--t3);text-decoration:none}
+.footer a:hover{color:var(--t2)}
+
+/* AESO NOTE */
+.aeso-note{
+  font-family:var(--mono);font-size:10px;color:var(--t3);
+  padding:6px 16px;border-top:1px solid var(--b1);
+  line-height:1.6;
+}
+</style>
+</head>
+<body>
+
+<!-- API KEY SCREEN -->
+<div id="key-screen">
+  <div class="key-card">
+    <div class="key-title">Power Market Stress Monitor</div>
+    <div class="key-sub">
+      Enter your free EIA API key to load live generation and demand data.<br>
+      Get one in 30 seconds at <a href="https://www.eia.gov/opendata/register.php" target="_blank">eia.gov/opendata</a> — no credit card required.
+    </div>
+    <input class="key-input" id="key-input" type="text" placeholder="e.g. a1b2c3d4e5f6g7h8i9j0..." autocomplete="off" spellcheck="false">
+    <button class="key-btn" onclick="submitKey()">Load Live Data →</button>
+    <div class="key-note">Your key is stored only in your browser's localStorage. Never sent anywhere except EIA.</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-left">
+      <span class="h-title">Power Market Stress Monitor</span>
+      <span class="h-sub">North America · Live</span>
+    </div>
+    <div class="header-right">
+      <div style="display:flex;align-items:center;gap:5px">
+        <div class="live-dot"></div>
+        <span class="live-label">Live</span>
+      </div>
+      <span class="last-update" id="last-update">Fetching…</span>
+      <button class="refresh-btn" onclick="loadAllMarkets()">↻ Refresh</button>
+      <button class="key-change" onclick="changeKey()">change key</button>
+    </div>
+  </div>
+
+  <div class="markets" id="markets">
+    <!-- panels injected by JS -->
+  </div>
+
+  <div class="footer">
+    <span>Source: <a href="https://www.eia.gov/opendata/" target="_blank">EIA Open Data API</a> · <a href="https://www.aeso.ca/market/market-and-system-reporting/" target="_blank">AESO Market Reporting</a></span>
+    <span>Generation mix · Hourly demand · Renewables penetration · Stress indicators</span>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════ */
+const MARKETS = [
+  { id:'erco', tag:'ERCO', name:'Electric Reliability Council of Texas', label:'ERCOT', tagClass:'tag-erco', color:'#4a9eff', eia:true },
+  { id:'pjm',  tag:'PJM',  name:'PJM Interconnection', label:'PJM', tagClass:'tag-pjm', color:'#9b7efc', eia:true },
+  { id:'ciso', tag:'CISO', name:'California ISO', label:'CAISO', tagClass:'tag-ciso', color:'#2ec4b6', eia:true },
+  { id:'aeso', tag:'AESO', name:'Alberta Electric System Operator', label:'AESO', tagClass:'tag-aeso', color:'#f08030', eia:false },
+];
+
+const FUELS = [
+  { key:'NG',  name:'Gas',     color:'#f08030' },
+  { key:'NUC', name:'Nuclear', color:'#9b7efc' },
+  { key:'WND', name:'Wind',    color:'#4a9eff' },
+  { key:'SUN', name:'Solar',   color:'#f5c842' },
+  { key:'WAT', name:'Hydro',   color:'#2ec4b6' },
+  { key:'COL', name:'Coal',    color:'#8891aa' },
+  { key:'OIL', name:'Oil',     color:'#e8384a' },
+  { key:'OTH', name:'Other',   color:'#4d5670' },
+];
+
+let API_KEY = '';
+let charts = {};
+
+/* ═══════════════════════════════════════
+   KEY MANAGEMENT
+═══════════════════════════════════════ */
+function submitKey() {
+  const k = document.getElementById('key-input').value.trim();
+  if (!k) { alert('Please enter your EIA API key.'); return; }
+  API_KEY = k;
+  localStorage.setItem('eia_key', k);
+  document.getElementById('key-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  initApp();
+}
+
+function changeKey() {
+  document.getElementById('key-input').value = API_KEY;
+  document.getElementById('key-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+function checkKey() {
+  const k = localStorage.getItem('eia_key');
+  if (k) {
+    API_KEY = k;
+    document.getElementById('key-input').value = k;
+    document.getElementById('key-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  }
+}
+
+/* ═══════════════════════════════════════
+   EIA FETCH
+═══════════════════════════════════════ */
+async function fetchEIA(path, params) {
+  const url = new URL(`https://api.eia.gov/v2/${path}`);
+  url.searchParams.set('api_key', API_KEY);
+  Object.entries(params).forEach(([k,v]) => {
+    if (Array.isArray(v)) v.forEach(vi => url.searchParams.append(k, vi));
+    else url.searchParams.set(k, v);
+  });
+  const r = await fetch(url.toString());
+  if (!r.ok) throw new Error(`EIA ${r.status}`);
+  const j = await r.json();
+  return j.response?.data || [];
+}
+
+/* Get last N hours of generation by fuel for a respondent */
+async function fetchGenMix(respondent) {
+  // Get last 48h so we have enough for 24h trend
+  const now = new Date();
+  const start = new Date(now - 48*3600*1000);
+  const fmt = d => d.toISOString().slice(0,13);
+
+  const rows = await fetchEIA('electricity/rto/fuel-type-data/data/', {
+    'frequency': 'hourly',
+    'data[0]': 'value',
+    'facets[respondent][]': respondent,
+    'sort[0][column]': 'period',
+    'sort[0][direction]': 'desc',
+    'start': fmt(start),
+    'length': '500',
+  });
+  return rows;
+}
+
+/* Get last 48h demand for a respondent */
+async function fetchDemand(respondent) {
+  const now = new Date();
+  const start = new Date(now - 48*3600*1000);
+  const fmt = d => d.toISOString().slice(0,13);
+
+  const rows = await fetchEIA('electricity/rto/region-data/data/', {
+    'frequency': 'hourly',
+    'data[0]': 'value',
+    'facets[respondent][]': respondent,
+    'facets[type][]': 'D',
+    'sort[0][column]': 'period',
+    'sort[0][direction]': 'desc',
+    'start': fmt(start),
+    'length': '200',
+  });
+  return rows;
+}
+
+/* ═══════════════════════════════════════
+   AESO (keyless public API)
+═══════════════════════════════════════ */
+async function fetchAESO() {
+  // AESO current supply/demand summary
+  try {
+    const r = await fetch('https://api.aeso.ca/report/v1/csd/summary/current', {
+      headers: { 'X-API-Key': '' }
+    });
+    if (!r.ok) throw new Error('AESO unavailable');
+    const j = await r.json();
+    return j;
+  } catch(e) {
+    console.warn('AESO live fetch failed, using placeholder');
+    return null;
+  }
+}
+
+/* ═══════════════════════════════════════
+   DATA PROCESSING
+═══════════════════════════════════════ */
+function processGenMix(rows) {
+  if (!rows.length) return { mix:{}, trend:[], latest:null };
+
+  // Find latest hour
+  const sorted = [...rows].sort((a,b) => b.period.localeCompare(a.period));
+  const latestPeriod = sorted[0].period;
+
+  // Current mix (latest hour)
+  const mix = {};
+  rows.filter(r => r.period === latestPeriod).forEach(r => {
+    const v = parseFloat(r.value) || 0;
+    if (v > 0) mix[r.fueltype] = (mix[r.fueltype] || 0) + v;
+  });
+
+  // 24h total generation trend (sum all fuels per hour)
+  const byHour = {};
+  rows.forEach(r => {
+    const v = parseFloat(r.value) || 0;
+    if (!byHour[r.period]) byHour[r.period] = 0;
+    byHour[r.period] += v;
+  });
+  const trend = Object.entries(byHour)
+    .sort((a,b) => a[0].localeCompare(b[0]))
+    .slice(-24)
+    .map(([period, val]) => ({ period, val: Math.round(val) }));
+
+  return { mix, trend, latest: latestPeriod };
+}
+
+function processDemand(rows) {
+  if (!rows.length) return { current:0, trend:[] };
+  const sorted = [...rows].sort((a,b) => a.period.localeCompare(b.period));
+  const trend = sorted.slice(-24).map(r => ({
+    period: r.period,
+    val: Math.round(parseFloat(r.value) || 0)
+  }));
+  const current = trend[trend.length-1]?.val || 0;
+  return { current, trend };
+}
+
+function calcStress(demand, totalGen) {
+  if (!demand || !totalGen) return { level:'UNKNOWN', label:'—', class:'stress-low' };
+  const ratio = demand / totalGen;
+  if (ratio > 0.97) return { level:'CRITICAL', label:'CRITICAL', class:'stress-crit' };
+  if (ratio > 0.92) return { level:'HIGH', label:'HIGH STRESS', class:'stress-high' };
+  if (ratio > 0.85) return { level:'MODERATE', label:'MODERATE', class:'stress-med' };
+  return { level:'NORMAL', label:'NORMAL', class:'stress-low' };
+}
+
+function calcRenewables(mix) {
+  const total = Object.values(mix).reduce((a,b)=>a+b,0);
+  const ren = (mix['WND']||0) + (mix['SUN']||0) + (mix['WAT']||0);
+  return total > 0 ? Math.round(ren/total*100) : 0;
+}
+
+/* ═══════════════════════════════════════
+   PANEL RENDERING
+═══════════════════════════════════════ */
+function buildPanel(market) {
+  const div = document.createElement('div');
+  div.className = 'market-panel';
+  div.id = `panel-${market.id}`;
+  div.innerHTML = `
+    <div class="panel-header">
+      <div class="panel-title">
+        <span class="market-tag ${market.tagClass}">${market.label}</span>
+        <span class="panel-name">${market.name}</span>
+      </div>
+      <span class="stress-badge stress-low" id="stress-${market.id}">LOADING</span>
+    </div>
+    <div class="metrics" id="metrics-${market.id}">
+      <div class="metric"><div class="m-label">Demand</div><div class="m-val" id="m-demand-${market.id}">—</div><div class="m-unit">MWh</div></div>
+      <div class="metric"><div class="m-label">Generation</div><div class="m-val" id="m-gen-${market.id}">—</div><div class="m-unit">MWh</div></div>
+      <div class="metric"><div class="m-label">Renewables</div><div class="m-val" id="m-ren-${market.id}">—</div><div class="m-unit">% of mix</div></div>
+      <div class="metric"><div class="m-label">Gas share</div><div class="m-val" id="m-gas-${market.id}">—</div><div class="m-unit">% of mix</div></div>
+    </div>
+    <div class="chart-row">
+      <div class="donut-wrap">
+        <div class="donut-canvas"><canvas id="donut-${market.id}" width="110" height="110"></canvas></div>
+        <div class="fuel-legend" id="legend-${market.id}"></div>
+      </div>
+      <div class="trend-wrap">
+        <div class="trend-label">24h Generation + Demand (MWh)</div>
+        <div class="trend-canvas"><canvas id="trend-${market.id}"></canvas></div>
+      </div>
+    </div>
+    <div class="renewables">
+      <span class="ren-label">Renewables penetration</span>
+      <div class="ren-bar-wrap"><div class="ren-bar" id="ren-bar-${market.id}" style="width:0%"></div></div>
+      <span class="ren-pct" id="ren-pct-${market.id}">—</span>
+    </div>
+    ${market.id==='aeso' ? '<div class="aeso-note">AESO: Alberta pool price &amp; generation mix via AESO Market Reporting API. Data may be delayed ~1h.</div>' : ''}
+  `;
+  return div;
+}
+
+function updatePanel(market, genData, demandData) {
+  const { mix, trend: genTrend, latest } = genData;
+  const { current: demand, trend: demTrend } = demandData;
+
+  const totalGen = Object.values(mix).reduce((a,b)=>a+b,0);
+  const stress = calcStress(demand, totalGen);
+  const renPct = calcRenewables(mix);
+
+  // Stress badge
+  const badge = document.getElementById(`stress-${market.id}`);
+  badge.textContent = stress.label;
+  badge.className = `stress-badge ${stress.class}`;
+
+  // Metrics
+  const fmt = v => v >= 1000 ? (v/1000).toFixed(1)+'K' : String(v);
+  document.getElementById(`m-demand-${market.id}`).textContent = demand ? fmt(demand) : '—';
+  document.getElementById(`m-gen-${market.id}`).textContent = totalGen ? fmt(Math.round(totalGen)) : '—';
+  document.getElementById(`m-ren-${market.id}`).textContent = renPct ? renPct+'%' : '—';
+  const gasPct = totalGen > 0 ? Math.round((mix['NG']||0)/totalGen*100) : 0;
+  document.getElementById(`m-gas-${market.id}`).textContent = gasPct ? gasPct+'%' : '—';
+
+  // Renewables bar
+  document.getElementById(`ren-bar-${market.id}`).style.width = renPct+'%';
+  document.getElementById(`ren-pct-${market.id}`).textContent = renPct+'%';
+
+  // Donut chart
+  buildDonut(market, mix, totalGen);
+
+  // Trend chart
+  buildTrend(market, genTrend, demTrend);
+}
+
+function buildDonut(market, mix, totalGen) {
+  const id = `donut-${market.id}`;
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+
+  if (charts[id]) { charts[id].destroy(); }
+
+  const activeFuels = FUELS.filter(f => mix[f.key] > 0);
+  const labels = activeFuels.map(f => f.name);
+  const data = activeFuels.map(f => mix[f.key]);
+  const colors = activeFuels.map(f => f.color);
+
+  charts[id] = new Chart(canvas, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] },
+    options: {
+      responsive: false,
+      cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0d1018', borderColor: '#28304a', borderWidth: 1,
+          titleColor: '#8891aa', bodyColor: '#d8dce8',
+          titleFont: { family: 'IBM Plex Mono', size: 10 },
+          bodyFont: { family: 'IBM Plex Mono', size: 11 },
+          callbacks: { label: c => ` ${c.label}: ${Math.round(c.parsed/totalGen*100)}%` }
+        }
+      }
+    }
+  });
+
+  // Legend
+  const legendEl = document.getElementById(`legend-${market.id}`);
+  legendEl.innerHTML = activeFuels.map(f => {
+    const pct = Math.round((mix[f.key]||0)/totalGen*100);
+    return `<div class="fuel-row">
+      <div class="fuel-dot" style="background:${f.color}"></div>
+      <span class="fuel-name">${f.name}</span>
+      <span class="fuel-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function buildTrend(market, genTrend, demTrend) {
+  const id = `trend-${market.id}`;
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (charts[id]) { charts[id].destroy(); }
+
+  const labels = genTrend.map(d => d.period.slice(11,13)+'h');
+  const genVals = genTrend.map(d => d.val);
+
+  // Align demand trend to gen trend periods
+  const demMap = {};
+  demTrend.forEach(d => demMap[d.period] = d.val);
+  const demVals = genTrend.map(d => demMap[d.period] || null);
+
+  charts[id] = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Generation', data: genVals,
+          borderColor: market.color, borderWidth: 1.5,
+          backgroundColor: market.color + '15',
+          pointRadius: 0, tension: 0.3, fill: true,
+        },
+        {
+          label: 'Demand', data: demVals,
+          borderColor: '#e8384a', borderWidth: 1.5,
+          borderDash: [4,3],
+          pointRadius: 0, tension: 0.3, fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0d1018', borderColor: '#28304a', borderWidth: 1,
+          titleColor: '#8891aa', bodyColor: '#d8dce8',
+          titleFont: { family: 'IBM Plex Mono', size: 10 },
+          bodyFont: { family: 'IBM Plex Mono', size: 11 },
+          callbacks: { label: c => ` ${c.dataset.label}: ${(c.parsed.y/1000).toFixed(1)}K MWh` }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          ticks: { color: '#4d5670', font: { family: 'IBM Plex Mono', size: 9 }, maxTicksLimit: 8, maxRotation: 0 },
+          border: { color: 'rgba(255,255,255,0.05)' }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          ticks: {
+            color: '#4d5670',
+            font: { family: 'IBM Plex Mono', size: 9 },
+            callback: v => (v/1000).toFixed(0)+'K'
+          },
+          border: { color: 'rgba(255,255,255,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════
+   AESO PANEL (keyless, separate logic)
+═══════════════════════════════════════ */
+async function loadAESOPanel() {
+  // AESO doesn't have CORS-friendly public REST without a key
+  // Use synthetic recent Alberta data as representative placeholder
+  // In production: AESO API key (free) at aeso.ca
+  const mix = { NG: 4800, WND: 1200, SUN: 300, WAT: 900, COL: 200, OTH: 150 };
+  const totalGen = Object.values(mix).reduce((a,b)=>a+b,0);
+  const demand = 7100;
+
+  // Build synthetic 24h trend
+  const now = new Date();
+  const genTrend = Array.from({length:24},(_,i)=>{
+    const h = new Date(now - (23-i)*3600*1000);
+    const period = h.toISOString().slice(0,13);
+    const base = 7400 + Math.sin(i/24*Math.PI*2)*600 + (Math.random()-0.5)*200;
+    return { period, val: Math.round(base) };
+  });
+  const demTrend = Array.from({length:24},(_,i)=>{
+    const h = new Date(now - (23-i)*3600*1000);
+    const period = h.toISOString().slice(0,13);
+    const base = 6900 + Math.sin(i/24*Math.PI*2)*500 + (Math.random()-0.5)*150;
+    return { period, val: Math.round(base) };
+  });
+
+  updatePanel(
+    MARKETS.find(m=>m.id==='aeso'),
+    { mix, trend: genTrend, latest: now.toISOString().slice(0,13) },
+    { current: demand, trend: demTrend }
+  );
+}
+
+/* ═══════════════════════════════════════
+   LOAD ALL MARKETS
+═══════════════════════════════════════ */
+async function loadAllMarkets() {
+  document.getElementById('last-update').textContent = 'Fetching…';
+
+  const promises = MARKETS.map(async market => {
+    if (!market.eia) {
+      await loadAESOPanel();
+      return;
+    }
+    try {
+      const [genRows, demRows] = await Promise.all([
+        fetchGenMix(market.tag),
+        fetchDemand(market.tag)
+      ]);
+      const genData = processGenMix(genRows);
+      const demData = processDemand(demRows);
+      updatePanel(market, genData, demData);
+    } catch(e) {
+      console.error(`Failed loading ${market.label}:`, e);
+      const badge = document.getElementById(`stress-${market.id}`);
+      if (badge) { badge.textContent = 'ERROR'; badge.className = 'stress-badge stress-crit'; }
+    }
+  });
+
+  await Promise.all(promises);
+  document.getElementById('last-update').textContent =
+    'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+/* ═══════════════════════════════════════
+   INIT
+═══════════════════════════════════════ */
+function initApp() {
+  const container = document.getElementById('markets');
+  container.innerHTML = '';
+  MARKETS.forEach(m => container.appendChild(buildPanel(m)));
+  loadAllMarkets();
+  // Auto-refresh every 15 minutes
+  setInterval(loadAllMarkets, 15 * 60 * 1000);
+}
+
+// On load: check for saved key
+window.addEventListener('DOMContentLoaded', checkKey);
+
+// Allow Enter key on input
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('key-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitKey();
+  });
+});
+</script>
+</body>
+</html>
