@@ -41,16 +41,6 @@ Power prices are driven by the margin between supply and demand, and by the marg
 
 ---
 
-## Notable events captured
-
-The dashboard can reproduce conditions behind landmark market events:
-
-- **ERCOT Feb 2021** — Winter Storm Uri drove demand to record highs while wind and gas generation collapsed simultaneously, pushing prices to the $9,000/MWh cap
-- **CAISO Sep 2022** — Extreme heat wave, Flex Alert issued, demand hit all-time records with solar dropping at sunset during peak load
-- **AESO price spikes** — Alberta's energy-only market produces some of North America's most volatile pool prices, regularly spiking above $1,000/MWh during cold snaps
-
----
-
 ## Stack
 
 Single self-contained `index.html` — no build step, no framework, no backend.
