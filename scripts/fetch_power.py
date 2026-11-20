@@ -180,6 +180,9 @@ def clean_demand(series):
     for h in list(D):
         if D[h] is None or D[h] <= 0 or D[h] < 0.3 * med:
             del D[h]
+    for h in list(DF):
+        if DF[h] is None or DF[h] <= 0 or DF[h] < 0.3 * med:
+            del DF[h]
     for h in sorted(D, reverse=True):
         if h in DF and DF[h] and abs(D[h] - DF[h]) < 0.5:
             del D[h]
