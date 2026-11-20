@@ -201,7 +201,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 48px;font-size:12px;color:v
       </div>
       <div class="note">
         <h3>Sources</h3>
-        <p>US markets: <a href="https://www.eia.gov/electricity/gridmonitor/" target="_blank" rel="noopener">EIA Hourly Electric Grid Monitor</a> (form EIA-930) via the EIA Open Data API. Recent hours are preliminary and can be revised.</p>
+        <p>US markets: <a href="https://www.eia.gov/electricity/gridmonitor/" target="_blank" rel="noopener">EIA Hourly Electric Grid Monitor</a> (form EIA-930) via the EIA Open Data API. Recent hours are preliminary and can be revised. Fuel mix and interchange are usually published several hours after demand, so each figure shows its own timestamp.</p>
         <p>Alberta: <a href="http://ets.aeso.ca/" target="_blank" rel="noopener">AESO public reports</a> for pool price, demand and live supply. Fuel mix is sampled hourly.</p>
       </div>
     </div>
@@ -241,7 +241,8 @@ function analyse(m){
   const cut = hour ? tms(hour) - 30*864e5 : 0;
   let peak = null, peakH = null;
   d.hours.forEach((h,i) => { const v = d.actual[i]; if (v != null && tms(h) >= cut && (peak == null || v > peak)) { peak = v; peakH = h; } });
-  const ti = di >= 0 ? d.interchange[di] : null;
+  let ti = null, tiH = null, tiD = null;
+  for (let i = d.hours.length-1; i >= 0; i--) if (d.interchange[i] != null) { ti = d.interchange[i]; tiH = d.hours[i]; tiD = d.actual[i]; break; }
   // latest fuel mix
   const mi = mix.hours.length - 1;
   const cur = {}; let tot = 0;
@@ -258,10 +259,11 @@ function analyse(m){
   if (ratio != null && ratio >= .95) status = {k:'warn', t:'Near peak'};
   else if (fcErr != null && fcErr >= .04) status = {k:'warn', t:'Above forecast'};
   const imports = live && live.interchange != null ? -live.interchange : (ti != null ? -ti : null);
+  const importsBase = live ? live.ail : tiD; const importsH = live ? null : tiH;
   // price (AESO)
   let price = null;
   if (m.price && m.price.actual && m.price.actual.length) { const [p, pi] = last(m.price.actual); price = {v:p, h:m.price.hours[pi]}; }
-  return {dem: demandNow, hour, fc, fcErr, peak, peakH, ratio, cur, tot, share, clean, imports, status, mixHour: mix.hours[mi], price, live};
+  return {importsBase, importsH, dem: demandNow, hour, fc, fcErr, peak, peakH, ratio, cur, tot, share, clean, imports, status, mixHour: mix.hours[mi], price, live};
 }
 
 /* ---------- tiles ---------- */
@@ -324,11 +326,11 @@ function renderDetail(){
   const stats = [
     ['Demand', `${gw(a.dem)}<small>GW</small>`, fcTxt],
     ['30-day peak', `${gw(a.peak)}<small>GW</small>`, a.ratio != null ? `Now at ${pct(a.ratio)} of peak` : '–'],
-    ['Clean share', pct(a.clean), a.mixHour ? 'Nuclear, wind, solar, hydro' : 'Mix not yet available'],
-    ['Natural gas', pct(a.share('gas')), 'Share of generation'],
+    ['Clean share', pct(a.clean), a.mixHour ? 'Nuclear, wind, solar, hydro · ' + localTime(a.mixHour, m.tz, {weekday:'short', hour:'numeric'}) : 'Mix not yet available'],
+    ['Natural gas', pct(a.share('gas')), a.mixHour ? 'Share of generation · ' + localTime(a.mixHour, m.tz, {weekday:'short', hour:'numeric'}) : 'Share of generation'],
     a.price
       ? ['Pool price', `$${a.price.v.toFixed(0)}<small>/MWh</small>`, 'CAD, last settled hour']
-      : ['Net imports', a.imports == null ? '–' : `${a.imports < 0 ? '−' : ''}${gw(Math.abs(a.imports))}<small>GW</small>`, a.imports == null ? '' : a.imports >= 0 ? `${pct(a.dem ? a.imports/a.dem : null)} of demand` : 'Net exporter'],
+      : ['Net imports', a.imports == null ? '–' : `${a.imports < 0 ? '−' : ''}${gw(Math.abs(a.imports))}<small>GW</small>`, a.imports == null ? 'Not reported' : (a.imports >= 0 ? `${pct(a.importsBase ? a.imports/a.importsBase : null)} of demand` : 'Net exporter') + (a.importsH ? ' · ' + localTime(a.importsH, m.tz, {weekday:'short', hour:'numeric'}) : '')],
   ];
   const mixDays = m.mix.hours.length;
   $('#detail').innerHTML = `

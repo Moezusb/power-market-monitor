@@ -140,6 +140,7 @@ def pack_market(m, mix, series, extra=None):
         while mix_hours and totals and totals[-1] < 0.6 * med:
             mix_hours.pop()
             totals.pop()
+    clean_demand(series)
     dem_hours = sorted(set(series["D"]) | set(series["DF"]))
     out = {
         **{k: m[k] for k in ("id", "label", "name", "region", "tz") if k in m},
@@ -162,6 +163,28 @@ def pack_market(m, mix, series, extra=None):
     if extra:
         out.update(extra)
     return out
+
+
+def clean_demand(series):
+    """Drop obviously bad preliminary demand values.
+
+    - zero/negative or implausibly low readings (< 30% of the median)
+    - trailing hours where 'actual' equals the day-ahead forecast exactly, which is
+      how not-yet-reported hours show up in preliminary EIA-930 data
+    """
+    D, DF = series["D"], series["DF"]
+    vals = sorted(v for v in D.values() if v and v > 0)
+    if not vals:
+        return
+    med = vals[len(vals) // 2]
+    for h in list(D):
+        if D[h] is None or D[h] <= 0 or D[h] < 0.3 * med:
+            del D[h]
+    for h in sorted(D, reverse=True):
+        if h in DF and DF[h] and abs(D[h] - DF[h]) < 0.5:
+            del D[h]
+        else:
+            break
 
 
 def rnd(v):
