@@ -28,7 +28,7 @@ jobs:
         env:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
           DEBUG: ${{ github.event_name == 'push' && '1' || '0' }}
-        run: python scripts/fetch_power.py
+        run: python -u scripts/fetch_power.py
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
