@@ -274,7 +274,7 @@ def fetch_aeso_hourly(now):
     i_price = col("Actual Posted Pool Price", "Actual Pool Price")
     i_fprice = col("Forecast Pool Price")
     i_ail = col("Actual AIL")
-    i_fail = col("Day Ahead Forecasted AIL", "Forecasted AIL")
+    i_fail = col("Day Ahead Forecasted AIL", "Forecast AIL")
     out = {"D": {}, "DF": {}, "price": {}, "price_fc": {}}
     seen = set()
     for r in reader:
