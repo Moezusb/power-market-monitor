@@ -200,6 +200,7 @@ AESO_FUEL = {
     "GAS": "gas", "HYDRO": "hydro", "ENERGY STORAGE": "storage", "SOLAR": "solar",
     "WIND": "wind", "BIOMASS AND OTHER": "other", "OTHER": "other",
     "DUAL FUEL": "gas", "COAL": "coal",
+    "COGENERATION": "gas", "COMBINED CYCLE": "gas", "GAS FIRED STEAM": "gas", "SIMPLE CYCLE": "gas",
 }
 EDMONTON = ZoneInfo("America/Edmonton")
 
@@ -247,7 +248,7 @@ def fetch_aeso_csd():
 def fetch_aeso_hourly(now):
     """Hourly pool price and AIL (actual + day-ahead forecast)."""
     local_now = now.astimezone(EDMONTON)
-    begin = (local_now - timedelta(days=DEMAND_DAYS)).strftime("%m%d%Y")
+    begin = (local_now - timedelta(days=29)).strftime("%m%d%Y")  # report allows max 31 days
     end = (local_now + timedelta(days=1)).strftime("%m%d%Y")
     url = ("http://ets.aeso.ca/ets_web/ip/Market/Reports/ActualForecastWMRQHReportServlet"
            f"?beginDate={begin}&endDate={end}&contentType=csv")
